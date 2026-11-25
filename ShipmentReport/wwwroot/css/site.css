@@ -131,7 +131,7 @@ h1, h2, h3, p { margin: 0; }
 /* Summary figures */
 .stat { padding: 24px; display: flex; flex-direction: column; gap: 12px; }
 .stat-value { font-size: clamp(28px, 2.7vw, 38px); line-height: 1.05; font-weight: 500; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.stat-row { padding: 20px 24px; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.stat-row { padding: 20px 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .stat-row .label { font-size: 14px; }
 .stat-sm { font-size: 28px; line-height: 1.1; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .unit { font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--muted-2); }

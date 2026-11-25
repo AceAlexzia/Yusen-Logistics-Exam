@@ -139,6 +139,14 @@ public static class ReportExporter
         return output.ToArray();
     }
 
+    /// <summary>Time with lead time, origin with carrier, release port with delivery, documents with declarations; anything else after.</summary>
+    static List<ChartImage> OrderForPdf(List<ChartImage> charts)
+    {
+        string[] order = ["Containers per", "Lead time", "By origin", "By carrier", "By release", "Delivery", "Document", "Declaration"];
+        int Rank(ChartImage c) => Array.FindIndex(order, o => c.Title.StartsWith(o, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? i : order.Length;
+        return charts.OrderBy(Rank).ToList();
+    }
+
     public static byte[] ToPdf(Dataset ds, List<ShipmentRow> rows, ReportFilter f, ReportSummary s, List<ChartImage> charts)
     {
         var filters = f.Describe().ToList();
@@ -173,21 +181,23 @@ public static class ReportExporter
                         for (int i = line.Length; i < 5; i++) row.RelativeItem();
                     });
 
-                // 3 charts per row at a fixed height keeps all six on the first page.
-                foreach (var group in charts.Chunk(3))
-                    col.Item().ShowEntire().Row(row =>
+                // Two charts per row, in pairs that belong together. The page sends every chart at the same width,
+                // so FitWidth gives them all the same text size.
+                foreach (var pair in OrderForPdf(charts).Chunk(2))
+                    col.Item().ShowEntire().PaddingTop(6).Row(row =>
                     {
-                        foreach (var c in group)
-                            row.RelativeItem().Padding(4).Column(cc =>
+                        row.Spacing(24);
+                        foreach (var c in pair)
+                            row.RelativeItem().Column(cc =>
                             {
-                                cc.Item().Text(c.Title).Bold();
-                                cc.Item().Height(170).AlignCenter().Image(c.Png).FitArea();
+                                cc.Spacing(4);
+                                cc.Item().Text(c.Title).FontSize(10).Bold().FontColor("#1C1B19");
+                                cc.Item().Image(c.Png).FitWidth();
                             });
-                        for (int i = group.Length; i < 3; i++) row.RelativeItem();
+                        if (pair.Length == 1) row.RelativeItem();
                     });
 
-                col.Item().PageBreak();
-                col.Item().Text($"Shipments ({rows.Count} rows)").FontSize(12).Bold();
+                col.Item().PaddingTop(12).Text($"Shipments ({rows.Count} rows)").FontSize(12).Bold();
                 col.Item().Table(t =>
                 {
                     var cols = KeyColumns.All;

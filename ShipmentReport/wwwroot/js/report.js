@@ -64,7 +64,11 @@
         onLeave: e => { e.native.target.style.cursor = 'default'; },
     };
 
-    new Chart(canvas('daily'), {
+    // Each chart's config comes from a factory, so export can build a fresh copy at a fixed size.
+    const makers = {};
+    const draw = (key, make) => { makers[key] = make; return new Chart(canvas(key), make()); };
+
+    draw('daily', () => ({
         type: 'bar',
         data: {
             labels: s.daily.labels,
@@ -96,7 +100,7 @@
                 go({ From: from, To: to });
             },
         },
-    });
+    }));
 
     // Writes "containers · CBM" after each bar, so both numbers read without a second axis.
     const endLabels = cbm => ({
@@ -119,7 +123,7 @@
         },
     });
 
-    const containersAndCbm = (key, data, filterKey) => new Chart(canvas(key), {
+    const containersAndCbm = (key, data, filterKey) => draw(key, () => ({
         type: 'bar',
         data: {
             labels: data.labels,
@@ -137,12 +141,12 @@
             onHover: pointer,
             onClick: onPick(label => label !== 'Unknown' && go({ [filterKey]: label })),
         },
-    });
+    }));
     containersAndCbm('origin', s.byOrigin, 'Origin');
     containersAndCbm('carrier', s.byCarrier, 'Carrier');
     containersAndCbm('release', s.byReleasePort, 'Release');
 
-    new Chart(canvas('lead'), {
+    draw('lead', () => ({
         type: 'bar',
         data: {
             labels: s.leadTime.labels,
@@ -169,24 +173,26 @@
             onHover: pointer,
             onClick: onPick(label => label !== 'Unknown' && go({ Origin: label })),
         },
-    });
+    }));
 
     // Status: one split bar, a dataset per category, with a legend of buttons (and counts) underneath.
+    const splits = {};
     const split = (key, data, filterKey, colors) => {
         const values = data.series[0].values;
         const total = values.reduce((a, b) => a + b, 0);
+        splits[key] = data.labels.map((label, i) => ({ label, value: values[i], color: colors[i % colors.length] }));
         const legend = document.createElement('div');
         legend.className = 'split-legend';
-        data.labels.forEach((label, i) => {
+        splits[key].forEach(({ label, value, color }) => {
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'split-item';
             b.title = `Filter to ${label}`;
             const sw = document.createElement('span');
             sw.className = 'swatch';
-            sw.style.background = colors[i % colors.length];
+            sw.style.background = color;
             const n = document.createElement('strong');
-            n.textContent = fmt(values[i]);
+            n.textContent = fmt(value);
             b.append(sw, label, n);
             b.addEventListener('click', () => go({ [filterKey]: label }));
             legend.append(b);
@@ -196,8 +202,8 @@
             type: 'bar',
             data: {
                 labels: ['Invoices'],
-                datasets: data.labels.map((label, i) => ({
-                    label, data: [values[i]], backgroundColor: colors[i % colors.length],
+                datasets: splits[key].map(({ label, value, color }) => ({
+                    label, data: [value], backgroundColor: color,
                     borderColor: '#fff', borderWidth: { left: 2 }, borderSkipped: false, barThickness: 14,
                 })),
             },
@@ -224,34 +230,67 @@
     const delivColor = { 'On time': ACCENT, 'Late': '#c2410c', 'Not delivered': PALE, 'No plan': GREY };
     split('deliv', s.delivery, 'Deliv', s.delivery.labels.map(l => delivColor[l] ?? GREY));
 
-    // The status charts' legend is HTML, so for export draw the bar plus one labelled row per category into one image.
-    const splitPng = c => {
-        const sets = Chart.getChart(c).data.datasets;
-        const total = sets.reduce((a, d) => a + d.data[0], 0);
-        const W = Math.max(c.clientWidth, 280), barH = c.clientHeight, rowH = 28, k = 2;
+    // Export images: every chart is drawn at the same width and text size, whatever the screen size,
+    // so the PDF and Excel get charts that match each other.
+    const EXPORT_W = 640, SCALE = 2;
+    const exportHeight = key => {
+        const n = (makers[key] ? makers[key]().data.labels.length : 0);
+        return key === 'daily' ? 320 : key === 'lead' ? Math.max(240, n * 40 + 80) : Math.max(140, n * 40 + 24);
+    };
+
+    // A status chart: the split bar and one labelled row per category, drawn directly (no chart needed).
+    const splitPng = key => {
+        const parts = splits[key];
+        const total = parts.reduce((a, p) => a + p.value, 0);
+        const barH = 18, gap = 2, rowH = 28, family = Chart.defaults.font.family;
         const out = document.createElement('canvas');
-        out.width = W * k;
-        out.height = (barH + 12 + sets.length * rowH) * k;
+        out.width = EXPORT_W * SCALE;
+        out.height = (barH + 16 + parts.length * rowH) * SCALE;
         const x = out.getContext('2d');
-        x.scale(k, k);
+        x.scale(SCALE, SCALE);
         x.fillStyle = '#fff';
-        x.fillRect(0, 0, W, out.height / k);
-        x.drawImage(c, 0, 0, W, barH); // the bar is plain rectangles, so stretching it is safe
+        x.fillRect(0, 0, EXPORT_W, out.height / SCALE);
+        const usable = EXPORT_W - gap * (parts.filter(p => p.value > 0).length - 1);
+        let left = 0;
+        parts.filter(p => p.value > 0).forEach(p => {
+            const w = total ? usable * p.value / total : 0;
+            x.fillStyle = p.color;
+            x.fillRect(left, 0, w, barH);
+            left += w + gap;
+        });
         x.textBaseline = 'middle';
-        sets.forEach((d, i) => {
-            const y = barH + 12 + i * rowH + rowH / 2;
-            x.fillStyle = d.backgroundColor;
+        parts.forEach((p, i) => {
+            const y = barH + 16 + i * rowH + rowH / 2;
+            x.fillStyle = p.color;
             x.fillRect(0, y - 6, 12, 12);
             x.fillStyle = INK;
-            x.font = `400 15px ${Chart.defaults.font.family}`;
+            x.font = `400 14px ${family}`;
             x.textAlign = 'left';
-            x.fillText(d.label, 22, y);
-            x.font = `500 15px ${Chart.defaults.font.family}`;
+            x.fillText(p.label, 22, y);
+            x.font = `500 14px ${family}`;
             x.textAlign = 'right';
-            const pct = total ? Math.round(d.data[0] * 100 / total) : 0;
-            x.fillText(`${fmt(d.data[0])}  (${pct}%)`, W, y);
+            const pct = total ? Math.round(p.value * 100 / total) : 0;
+            x.fillText(`${fmt(p.value)}  (${pct}%)`, EXPORT_W, y);
         });
         return out.toDataURL('image/png');
+    };
+
+    // Any other chart: a throwaway copy at the export size, off screen.
+    const chartPng = key => {
+        const host = document.createElement('div');
+        host.style.cssText = `position:fixed;left:-10000px;top:0;width:${EXPORT_W}px;height:${exportHeight(key)}px`;
+        const c = document.createElement('canvas');
+        c.width = EXPORT_W;
+        c.height = exportHeight(key);
+        host.append(c);
+        document.body.append(host);
+        const cfg = makers[key]();
+        cfg.options = { ...cfg.options, responsive: false, animation: false, devicePixelRatio: SCALE, onHover: null, onClick: null };
+        const chart = new Chart(c, cfg);
+        const png = chart.toBase64Image('image/png');
+        chart.destroy();
+        host.remove();
+        return png;
     };
 
     // Export: send each chart as a PNG along with the filters.
@@ -259,12 +298,12 @@
         const form = ev.target;
         form.querySelectorAll('input[data-png]').forEach(i => i.remove());
         document.querySelectorAll('.chart-card').forEach(card => {
-            const c = card.querySelector('canvas');
+            const key = card.querySelector('canvas').dataset.chart;
             const input = document.createElement('input');
             input.type = 'hidden';
             input.dataset.png = '1';
             input.name = `charts[${card.dataset.title}]`;
-            input.value = card.querySelector('.split-legend') ? splitPng(c) : c.toDataURL('image/png');
+            input.value = splits[key] ? splitPng(key) : chartPng(key);
             form.appendChild(input);
         });
     });
