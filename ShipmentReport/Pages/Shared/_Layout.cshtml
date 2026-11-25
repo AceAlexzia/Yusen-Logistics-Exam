@@ -4,22 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"]</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-xl">
-                <a class="navbar-brand" asp-page="/Index">Shipment Report</a>
-            </div>
-        </nav>
+    <header class="nav">
+        <div class="wrap nav-inner">
+            <a class="brand" asp-page="/Index" aria-label="Shipment report, home">
+                <span class="brand-mark" aria-hidden="true">S</span>
+                <span>Shipment report</span>
+            </a>
+            @await RenderSectionAsync("NavActions", required: false)
+        </div>
     </header>
-    <div class="container-xl">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
+    <main class="wrap page">
+        @RenderBody()
+    </main>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>
