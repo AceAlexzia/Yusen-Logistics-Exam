@@ -103,7 +103,7 @@ public static class ReportExporter
             sum.Cell(picRow, 10).Style.Font.SetBold();
             using var ms = new MemoryStream(c.Png);
             var pic = sum.AddPicture(ms).MoveTo(sum.Cell(picRow + 1, 10));
-            pic.ScaleWidth(560.0 / pic.Width, true);
+            pic.Scale(560.0 / pic.OriginalWidth, true); // both sides, so the chart keeps its proportions
             picRow += 2 + (int)Math.Ceiling(pic.Height / 20.0);
         }
 
