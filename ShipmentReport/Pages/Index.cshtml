@@ -1,0 +1,199 @@
+﻿@page
+@model IndexModel
+@using System.Text.Json
+@using ShipmentReport.Services
+@{
+    ViewData["Title"] = "Import Shipment Report";
+    var f = Model.Filter;
+    var s = Model.Summary;
+    var chips = new (string Key, string Label, string? Value)[]
+    {
+        ("Origin", "Origin", f.Origin), ("Carrier", "Carrier", f.Carrier), ("Size", "Size", f.Size),
+        ("Doc", "Documents", f.Doc), ("Decl", "Declaration", f.Decl),
+    };
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-0">Import Shipment Report</h1>
+        @if (Model.Data is not null)
+        {
+            <div class="text-muted small">
+                @Model.Data.FileName · sheet "@Model.Data.SheetName" · @Model.Data.Rows.Count rows imported
+                @if (Model.Data.SkippedRows > 0) { <span>· @Model.Data.SkippedRows empty/incomplete row(s) skipped</span> }
+            </div>
+        }
+    </div>
+    @if (Model.Data is not null)
+    {
+        <form method="post" asp-page-handler="Upload" enctype="multipart/form-data" class="upload-inline">
+            <label class="btn btn-outline-secondary btn-sm mb-0">
+                Import another file
+                <input type="file" name="file" accept=".xlsx" hidden onchange="this.form.submit()" />
+            </label>
+        </form>
+    }
+</div>
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.Error</div>
+}
+
+@if (Model.Data is null)
+{
+    <form method="post" asp-page-handler="Upload" enctype="multipart/form-data" id="dropzone" class="dropzone">
+        <div class="fs-5 mb-2">Drop an .xlsx file here</div>
+        <div class="text-muted mb-3">or</div>
+        <label class="btn btn-primary">
+            Choose file
+            <input type="file" name="file" accept=".xlsx" hidden onchange="this.form.submit()" />
+        </label>
+        <div class="text-muted small mt-3">The first sheet is read. Columns are matched by header name (Job I, Invoice No, ETA, CTNR NO., CBM …).</div>
+    </form>
+}
+else
+{
+    <form method="get" class="filters card card-body mb-3" id="filters">
+        <input type="hidden" name="ds" value="@Model.Ds" />
+        @foreach (var c in chips.Where(c => c.Value is not null))
+        {
+            <input type="hidden" name="@c.Key" value="@c.Value" />
+        }
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-2">
+                <label class="form-label small mb-1" for="DateField">Date column</label>
+                <select class="form-select" id="DateField" name="DateField">
+                    @foreach (var d in Model.Data.DateFields)
+                    {
+                        <option value="@d.Key" selected="@(d.Key == DateField.Get(f.DateField).Key)">@d.Label</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="From">From</label>
+                <input class="form-control" type="date" id="From" name="From" value="@f.From?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="To">To</label>
+                <input class="form-control" type="date" id="To" name="To" value="@f.To?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="Group">Group chart by</label>
+                <select class="form-select" id="Group" name="Group">
+                    <option value="" selected="@(!Report.Groups.Contains(f.Group))">Auto (@s!.Group.ToLowerInvariant())</option>
+                    @foreach (var g in Report.Groups)
+                    {
+                        <option value="@g" selected="@(g == f.Group)">@g</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1" for="Q">PO / Invoice / Job no.</label>
+                <input class="form-control" type="search" id="Q" name="Q" value="@f.Q" list="numbers" autocomplete="off"
+                       placeholder="Type, then pick a full number" title="Only a full Job, Invoice or PO number matches" />
+                @* Suggestions from the whole file; the browser filters them as you type. *@
+                <datalist id="numbers">
+                    @foreach (var n in Model.Data.Rows.SelectMany(r => new[] { r.Job, r.Invoice, r.Po }).Where(n => n != "").Distinct().Order())
+                    {
+                        <option value="@n"></option>
+                    }
+                </datalist>
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button class="btn btn-primary flex-fill" type="submit">Apply</button>
+                <a class="btn btn-outline-secondary" href="?ds=@Model.Ds">Reset</a>
+            </div>
+        </div>
+        @if (chips.Any(c => c.Value is not null))
+        {
+            <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+                <span class="small text-muted">Chart filters:</span>
+                @foreach (var c in chips.Where(c => c.Value is not null))
+                {
+                    <a class="chip" href="@Model.LinkWith(c.Key, null)" title="Remove filter">@c.Label: @c.Value ✕</a>
+                }
+            </div>
+        }
+    </form>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="small text-muted">
+            Showing <strong>@s!.Kpis.Rows</strong> of @Model.Data.Rows.Count rows.
+            @if (s.Kpis.MissingDate > 0) { <span>@s.Kpis.MissingDate row(s) have no @DateField.Get(f.DateField).Label, so they're left out of the daily chart.</span> }
+            Tip: click a bar or slice to filter by it.
+        </div>
+        <form method="post" asp-page-handler="Export" id="export" class="d-flex gap-2">
+            <input type="hidden" name="ds" value="@Model.Ds" />
+            <input type="hidden" name="DateField" value="@f.DateField" />
+            <input type="hidden" name="From" value="@f.From?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="To" value="@f.To?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Q" value="@f.Q" />
+            <input type="hidden" name="Group" value="@f.Group" />
+            @foreach (var c in chips.Where(c => c.Value is not null))
+            {
+                <input type="hidden" name="@c.Key" value="@c.Value" />
+            }
+            <button class="btn btn-success" name="format" value="xlsx" type="submit">Export Excel</button>
+            <button class="btn btn-danger" name="format" value="pdf" type="submit">Export PDF</button>
+        </form>
+    </div>
+
+    <div class="kpis mb-3">
+        <div class="kpi"><div class="kpi-label">Jobs</div><div class="kpi-value">@s.Kpis.Jobs</div></div>
+        <div class="kpi"><div class="kpi-label">Invoices</div><div class="kpi-value">@s.Kpis.Invoices</div></div>
+        <div class="kpi"><div class="kpi-label">Containers</div><div class="kpi-value">@s.Kpis.Containers</div></div>
+        <div class="kpi"><div class="kpi-label">CBM</div><div class="kpi-value">@s.Kpis.Cbm.ToString("#,0.#")</div></div>
+        <div class="kpi"><div class="kpi-label">Avg days ETA → Customs</div><div class="kpi-value">@(s.Kpis.AvgDaysToCustoms?.ToString("0.0") ?? "-")</div></div>
+        <div class="kpi"><div class="kpi-label">Avg days ETA → Delivery</div><div class="kpi-value">@(s.Kpis.AvgDaysToDelivery?.ToString("0.0") ?? "-")</div></div>
+        <div class="kpi"><div class="kpi-label">Revised documents</div><div class="kpi-value">@s.Kpis.RevisedInvoices <span class="kpi-sub">of @s.Kpis.Invoices invoices</span></div></div>
+    </div>
+
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="alert alert-warning">
+            @if (!string.IsNullOrWhiteSpace(f.Q) && Report.Filter(Model.Data.Rows, new ReportFilter { Q = f.Q }).Count == 0)
+            {
+                <span>No Job, Invoice or PO number is exactly "@f.Q.Trim()". Type the full number, or pick one from the suggestions.</span>
+            }
+            else
+            {
+                <span>No rows match these filters.</span>
+            }
+            <a href="?ds=@Model.Ds">Reset filters</a>
+        </div>
+    }
+    else
+    {
+        <div class="charts mb-4">
+            <div class="chart-card wide"><h2>Containers per @s.Group.ToLowerInvariant() <span>by @DateField.Get(f.DateField).Label, stacked by size · click a bar to filter to that @s.Group.ToLowerInvariant(), or a size in the legend to filter by size</span></h2><div class="chart-box"><canvas data-chart="daily"></canvas></div></div>
+            <div class="chart-card"><h2>By origin port <span>containers &amp; CBM</span></h2><div class="chart-box"><canvas data-chart="origin"></canvas></div></div>
+            <div class="chart-card"><h2>By carrier <span>containers &amp; CBM</span></h2><div class="chart-box"><canvas data-chart="carrier"></canvas></div></div>
+            <div class="chart-card wide"><h2>Lead time from ETA <span>average days per invoice, by origin</span></h2><div class="chart-box"><canvas data-chart="lead"></canvas></div></div>
+            <div class="chart-card half"><h2>Document status <span>invoices</span></h2><div class="chart-box"><canvas data-chart="doc"></canvas></div></div>
+            <div class="chart-card half"><h2>Declaration status <span>invoices</span></h2><div class="chart-box"><canvas data-chart="decl"></canvas></div></div>
+        </div>
+
+        <h2 class="h5">Shipments <span class="text-muted small">(@Model.Rows.Count rows · click a header to sort)</span></h2>
+        <div class="table-responsive table-wrap">
+            <table class="table table-sm table-striped table-hover align-middle" id="rows">
+                <thead class="table-light">
+                    <tr>@foreach (var c in KeyColumns.All) { <th>@c.Label</th> }</tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>@foreach (var c in KeyColumns.All) { <td>@c.Value(r)</td> }</tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <script type="application/json" id="report-data">@Html.Raw(JsonSerializer.Serialize(new { summary = s, filter = new { f.DateField, f.Origin, f.Carrier, f.Size, f.Doc, f.Decl } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
+    }
+}
+
+@section Scripts {
+    <script src="~/lib/chartjs/chart.umd.min.js"></script>
+    <script src="~/js/report.js" asp-append-version="true"></script>
+}

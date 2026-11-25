@@ -55,3 +55,8 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Local tools / editor state
+.claude/
+.agents/
+skills-lock.json

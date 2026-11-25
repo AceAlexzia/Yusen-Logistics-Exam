@@ -1,0 +1,45 @@
+html { font-size: 14px; position: relative; min-height: 100%; }
+@media (min-width: 768px) { html { font-size: 15px; } }
+
+body { margin-bottom: 60px; background: #f5f7fa; color: #1f2933; }
+
+.btn:focus, .btn:active:focus, .form-control:focus, .form-select:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+.navbar-brand { font-weight: 600; color: #1d4e89 !important; }
+
+.dropzone {
+  border: 2px dashed #9aa5b1; border-radius: 12px; background: #fff;
+  padding: 4rem 1rem; text-align: center; transition: background .15s, border-color .15s;
+}
+.dropzone.over { background: #e8f0fb; border-color: #1d4e89; }
+
+.filters { border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+.chip {
+  display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .85rem;
+  background: #e8f0fb; color: #1d4e89; text-decoration: none;
+}
+.chip:hover { background: #d3e2f7; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; }
+.kpi { background: #fff; border-radius: 10px; padding: .75rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.kpi-label { font-size: .78rem; color: #616e7c; }
+.kpi-value { font-size: 1.5rem; font-weight: 600; color: #1d4e89; }
+.kpi-sub { font-size: .8rem; font-weight: 400; color: #616e7c; }
+
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.chart-card { background: #fff; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-card h2 { font-size: 1rem; font-weight: 600; margin-bottom: .5rem; }
+.chart-card h2 span { font-weight: 400; color: #616e7c; font-size: .85rem; }
+.chart-box { position: relative; height: 280px; }
+.chart-card.half .chart-box { height: 220px; }
+@media (max-width: 768px) { .charts { grid-template-columns: minmax(0, 1fr); } }
+
+.table-wrap { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); max-height: 600px; }
+#rows { font-size: .85rem; margin: 0; white-space: nowrap; }
+#rows thead th { position: sticky; top: 0; cursor: pointer; user-select: none; }
+#rows th[data-sort="asc"]::after { content: " ▲"; }
+#rows th[data-sort="desc"]::after { content: " ▼"; }
