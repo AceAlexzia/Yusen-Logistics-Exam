@@ -16,6 +16,9 @@ public sealed class ReportFilter
     public string? Doc { get; set; }
     /// <summary>A declaration status, or "None" for blank.</summary>
     public string? Decl { get; set; }
+    public string? Release { get; set; }
+    /// <summary>A <see cref="Report.DeliveryStatuses"/> value.</summary>
+    public string? Deliv { get; set; }
     /// <summary>Time chart buckets: "Day", "Week" or "Month"; empty = pick from the date span.</summary>
     public string? Group { get; set; }
 
@@ -30,11 +33,19 @@ public sealed class ReportFilter
         if (Size is not null) yield return ("Container size", Size);
         if (Doc is not null) yield return ("Documents", Doc);
         if (Decl is not null) yield return ("Declaration", Decl);
+        if (Release is not null) yield return ("Release port", Release);
+        if (Deliv is not null) yield return ("Delivery", Deliv);
     }
 }
 
 public sealed record Kpis(int Rows, int Jobs, int Invoices, int Containers, double Cbm, double Cartons,
-    double? AvgDaysToCustoms, double? AvgDaysToDelivery, int RevisedInvoices, int MissingDate);
+    double? AvgDaysToCustoms, double? AvgDaysToDelivery, int RevisedInvoices, int MissingDate,
+    int OnTimeContainers, int LateContainers, int NotDeliveredContainers)
+{
+    /// <summary>Share of delivered containers (with a plan) that arrived on or before the plan date.</summary>
+    public double? OnTimePercent => OnTimeContainers + LateContainers == 0 ? null
+        : Math.Round(100.0 * OnTimeContainers / (OnTimeContainers + LateContainers), 1);
+}
 
 public sealed record Series(string Label, List<double> Values);
 /// <param name="Ranges">For time charts: each bar's [from, to] dates (yyyy-MM-dd), used by click-to-filter.</param>
@@ -42,7 +53,7 @@ public sealed record ChartData(List<string> Labels, List<Series> Series, List<in
 
 /// <param name="Group">The bucket the time chart actually used: "Day", "Week" or "Month".</param>
 public sealed record ReportSummary(Kpis Kpis, string Group, ChartData Daily, ChartData ByOrigin, ChartData ByCarrier,
-    ChartData LeadTime, ChartData DocStatus, ChartData Declaration);
+    ChartData LeadTime, ChartData DocStatus, ChartData Declaration, ChartData ByReleasePort, ChartData Delivery);
 
 public static class Report
 {
@@ -64,6 +75,8 @@ public static class Report
             if (f.Size is not null && r.Size != f.Size) return false;
             if (f.Doc is not null && r.DocRevised != (f.Doc == "Revised")) return false;
             if (f.Decl is not null && DeclLabel(r) != f.Decl) return false;
+            if (f.Release is not null && (r.ReleasePort == "" ? "Unknown" : r.ReleasePort) != f.Release) return false;
+            if (f.Deliv is not null && DeliveryStatus(r) != f.Deliv) return false;
             return true;
         }).ToList();
 
@@ -72,6 +85,14 @@ public static class Report
     }
 
     public static string DeclLabel(ShipmentRow r) => r.Declaration == "" ? "None" : r.Declaration;
+
+    public static readonly string[] DeliveryStatuses = ["On time", "Late", "Not delivered", "No plan"];
+
+    /// <summary>Per container row: no Delivery Date yet, no Delivery Plan to compare with, or delivered on/after the plan day.</summary>
+    public static string DeliveryStatus(ShipmentRow r) =>
+        r.Date("Delivery") is not { } done ? "Not delivered"
+        : r.Date("DeliveryPlan") is not { } plan ? "No plan"
+        : done.Date <= plan.Date ? "On time" : "Late";
 
     static string ContainerKey(ShipmentRow r) => r.Container != "" ? r.Container : "row:" + r.GetHashCode();
 
@@ -118,6 +139,8 @@ public static class Report
     {
         var key = DateField.Get(dateField).Key;
         var invoices = OnePerInvoice(rows);
+        var byDelivery = rows.GroupBy(DeliveryStatus).ToDictionary(g => g.Key, g => g.Select(ContainerKey).Distinct().Count());
+        int Deliv(string s) => byDelivery.GetValueOrDefault(s);
 
         var kpis = new Kpis(
             Rows: rows.Count,
@@ -129,7 +152,10 @@ public static class Report
             AvgDaysToCustoms: AvgDays(invoices, "Customs"),
             AvgDaysToDelivery: AvgDays(invoices, "Delivery"),
             RevisedInvoices: invoices.Count(r => r.DocRevised),
-            MissingDate: rows.Count(r => r.Date(key) is null));
+            MissingDate: rows.Count(r => r.Date(key) is null),
+            OnTimeContainers: Deliv("On time"),
+            LateContainers: Deliv("Late"),
+            NotDeliveredContainers: Deliv("Not delivered"));
 
         // 1. Containers per day / week / month, stacked by size.
         var dated = rows.Where(r => r.Date(key) is not null).ToList();
@@ -172,6 +198,11 @@ public static class Report
         var decl = new ChartData(declGroups.Select(g => g.Key).ToList(),
             [new("Invoices", declGroups.Select(g => (double)g.Count()).ToList())]);
 
-        return new ReportSummary(kpis, g, daily,By(r => r.Origin), By(r => r.Carrier), lead, doc, decl);
+        // 5. Delivery status per container, in a fixed order, leaving out statuses with none.
+        var delivLabels = DeliveryStatuses.Where(byDelivery.ContainsKey).ToList();
+        var delivery = new ChartData(delivLabels, [new("Containers", delivLabels.Select(s => (double)byDelivery[s]).ToList())]);
+
+        return new ReportSummary(kpis, g, daily, By(r => r.Origin), By(r => r.Carrier), lead, doc, decl,
+            By(r => r.ReleasePort), delivery);
     }
 }

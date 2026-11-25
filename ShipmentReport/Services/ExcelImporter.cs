@@ -31,7 +31,7 @@ public static partial class ExcelImporter
         int po = norm.FindIndex(h => h == "po" || h.StartsWith("po ") || h.StartsWith("po.") || h.StartsWith("po#")); // not "port…"
         if (job < 0 && invoice < 0)
             throw new InvalidDataException("Couldn't find a 'Job' or 'Invoice No' column in the header row.");
-        int origin = Find("origin"), carrier = Find("carrier name", "carrier"), container = Find("ctnr no.", "container no");
+        int origin = Find("origin"), release = Find("release port"), carrier = Find("carrier name", "carrier"), container = Find("ctnr no.", "container no");
         int size = Find("container size"), cartons = Find("cartons"), cbm = Find("cbm");
         int docIssue = Find("shipping document issue"), decl = Find("status declaration");
 
@@ -66,6 +66,7 @@ public static partial class ExcelImporter
                 Invoice = Text(invoice),
                 Po = Text(po),
                 Origin = Text(origin),
+                ReleasePort = Text(release),
                 Carrier = Text(carrier).TrimEnd('.').Trim(), // "CNC LINE." == "CNC LINE"
                 Container = Text(container),
                 Size = Text(size),

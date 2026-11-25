@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model IndexModel
 @using System.Text.Json
 @using ShipmentReport.Services
@@ -10,6 +10,7 @@
     {
         ("Origin", "Origin", f.Origin), ("Carrier", "Carrier", f.Carrier), ("Size", "Size", f.Size),
         ("Doc", "Documents", f.Doc), ("Decl", "Declaration", f.Decl),
+        ("Release", "Release port", f.Release), ("Deliv", "Delivery", f.Deliv),
     };
     // Columns whose values are codes, shown in the mono face.
     var monoCols = new HashSet<string> { "Job", "Invoice No", "Container" };
@@ -179,9 +180,16 @@ else
             <div class="panel stat span-3"><span class="label">Volume</span><span class="stat-value">@s.Kpis.Cbm.ToString("#,0.#")</span><span class="meta quiet">CBM, counted once per invoice</span></div>
             <div class="panel stat span-3"><span class="label">Jobs</span><span class="stat-value">@s.Kpis.Jobs.ToString("#,0")</span><span class="meta quiet">Distinct job numbers</span></div>
             <div class="panel stat span-3"><span class="label">Invoices</span><span class="stat-value">@s.Kpis.Invoices.ToString("#,0")</span><span class="meta quiet">@s.Kpis.RevisedInvoices with revised documents</span></div>
-            <div class="panel stat-row span-4"><span class="label">ETA to customs release</span><span class="stat-sm">@(s.Kpis.AvgDaysToCustoms?.ToString("0.0") ?? "–") <span class="unit">days avg</span></span></div>
-            <div class="panel stat-row span-4"><span class="label">ETA to delivery</span><span class="stat-sm">@(s.Kpis.AvgDaysToDelivery?.ToString("0.0") ?? "–") <span class="unit">days avg</span></span></div>
-            <div class="panel stat-row span-4"><span class="label">Revised documents</span><span class="stat-sm">@s.Kpis.RevisedInvoices <span class="unit">of @s.Kpis.Invoices invoices</span></span></div>
+            <div class="panel stat-row span-3"><span class="label">ETA to customs release</span><span class="stat-sm">@(s.Kpis.AvgDaysToCustoms?.ToString("0.0") ?? "–") <span class="unit">days avg</span></span></div>
+            <div class="panel stat-row span-3"><span class="label">ETA to delivery</span><span class="stat-sm">@(s.Kpis.AvgDaysToDelivery?.ToString("0.0") ?? "–") <span class="unit">days avg</span></span></div>
+            <div class="panel stat-row span-3" title="Delivered containers with a delivery plan, delivered on or before the plan day">
+                <span class="label">Delivered on time</span>
+                <span class="stat-sm">@(s.Kpis.OnTimePercent is { } pct ? pct.ToString("0.#") + "%" : "–") <span class="unit">@s.Kpis.OnTimeContainers of @(s.Kpis.OnTimeContainers + s.Kpis.LateContainers)</span></span>
+            </div>
+            <a class="panel stat-row span-3 stat-link" href="@Model.LinkWith("Deliv", "Not delivered")" title="Show only containers with no delivery date">
+                <span class="label">Not delivered yet</span>
+                <span class="stat-sm">@s.Kpis.NotDeliveredContainers <span class="unit">containers</span></span>
+            </a>
         </div>
     </section>
 
@@ -228,6 +236,14 @@ else
                 <div class="panel chart-card span-6" data-title="By carrier">
                     <div class="card-head"><h3 class="h3">By carrier</h3><p class="meta">Containers, with volume in CBM</p></div>
                     <div class="chart-box" style="height: @(Math.Max(160, s.ByCarrier.Labels.Count * 44 + 24))px"><canvas data-chart="carrier" role="img" aria-label="Containers by carrier"></canvas></div>
+                </div>
+                <div class="panel chart-card span-4" data-title="Delivery status">
+                    <div class="card-head"><h3 class="h3">Delivery</h3><p class="meta">Containers, delivery date against plan</p></div>
+                    <div class="chart-box strip"><canvas data-chart="deliv" role="img" aria-label="Delivery status by container"></canvas></div>
+                </div>
+                <div class="panel chart-card span-8" data-title="By release port">
+                    <div class="card-head"><h3 class="h3">By release port</h3><p class="meta">Containers, with volume in CBM</p></div>
+                    <div class="chart-box" style="height: @(Math.Max(160, s.ByReleasePort.Labels.Count * 44 + 24))px"><canvas data-chart="release" role="img" aria-label="Containers by release port"></canvas></div>
                 </div>
                 <div class="panel chart-card span-12" data-title="Lead time from ETA">
                     <div class="card-head"><h3 class="h3">Lead time from ETA</h3><p class="meta">Average days per invoice, by origin</p></div>

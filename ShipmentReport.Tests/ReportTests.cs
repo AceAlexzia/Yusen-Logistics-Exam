@@ -56,6 +56,26 @@ public class ReportTests
     }
 
     [Fact]
+    public void Delivery_status_and_release_port()
+    {
+        var rows = Sample().Rows;
+        var s = Report.Summarize(rows, "ETA");
+        // Containers: delivered by the plan day, after it, or no Delivery Date yet.
+        Assert.Equal(24, s.Kpis.OnTimeContainers);
+        Assert.Equal(26, s.Kpis.LateContainers);
+        Assert.Equal(42, s.Kpis.NotDeliveredContainers);
+        Assert.Equal(48.0, s.Kpis.OnTimePercent);
+        Assert.Equal(["On time", "Late", "Not delivered"], s.Delivery.Labels);
+
+        Assert.Equal(["TEST-B1", "TEST-B5", "TEST-B3", "TEST-A0"], s.ByReleasePort.Labels);
+        Assert.Equal([61.0, 12, 10, 8], s.ByReleasePort.Series[0].Values);
+
+        var notDelivered = Report.Filter(rows, new ReportFilter { Deliv = "Not delivered" });
+        Assert.All(notDelivered, r => Assert.Null(r.Date("Delivery")));
+        Assert.All(Report.Filter(rows, new ReportFilter { Release = "TEST-A0" }), r => Assert.Equal("TEST-A0", r.ReleasePort));
+    }
+
+    [Fact]
     public void Summary_counts_each_invoice_once_for_cbm()
     {
         var rows = Report.Filter(Sample().Rows, new ReportFilter { Q = "JLB3A746574637-0" });

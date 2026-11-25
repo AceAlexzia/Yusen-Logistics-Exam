@@ -15,6 +15,7 @@ public static class KeyColumns
         ("Job", r => r.Job),
         ("Invoice No", r => r.Invoice),
         ("Origin", r => r.Origin),
+        ("Release Port", r => r.ReleasePort),
         ("Carrier", r => r.Carrier),
         ("Container", r => r.Container),
         ("Size", r => r.Size),
@@ -23,7 +24,9 @@ public static class KeyColumns
         ("ETA", r => D(r.Date("ETA"))),
         ("Doc Complete", r => D(r.Date("DocComplete"))),
         ("Customs Release", r => D(r.Date("Customs"))),
+        ("Delivery Plan", r => D(r.Date("DeliveryPlan"))),
         ("Delivery", r => D(r.Date("Delivery"))),
+        ("Delivery Status", Report.DeliveryStatus),
         ("Docs", r => r.DocRevised ? "Revised" : ""),
         ("Decl.", r => r.Declaration),
     ];
@@ -44,6 +47,8 @@ public static class ReportExporter
         ("Avg days ETA → Customs release", k.AvgDaysToCustoms?.ToString("0.0") ?? "-"),
         ("Avg days ETA → Delivery", k.AvgDaysToDelivery?.ToString("0.0") ?? "-"),
         ("Invoices with revised documents", $"{k.RevisedInvoices} of {k.Invoices}"),
+        ("Delivered on time (containers)", k.OnTimePercent is { } p ? $"{p:0.#}% ({k.OnTimeContainers} of {k.OnTimeContainers + k.LateContainers})" : "-"),
+        ("Not delivered yet (containers)", k.NotDeliveredContainers.ToString()),
     ];
 
     public static byte[] ToExcel(Dataset ds, List<ShipmentRow> rows, ReportFilter f, ReportSummary s, List<ChartImage> charts)
@@ -86,6 +91,8 @@ public static class ReportExporter
         Table("Avg lead time in days, by origin", s.LeadTime);
         Table("Document status (invoices)", s.DocStatus);
         Table("Declaration status (invoices)", s.Declaration);
+        Table("By release port", s.ByReleasePort);
+        Table("Delivery status (containers)", s.Delivery);
         sum.Column(1).Width = 36;
         sum.Columns(2, 8).Width = 16;
 
@@ -144,7 +151,7 @@ public static class ReportExporter
 
             page.Header().Column(col =>
             {
-                col.Item().Text("Import Shipment Report").FontSize(18).Bold().FontColor("#1d4e89");
+                col.Item().Text("Import Shipment Report").FontSize(18).Bold().FontColor("#1C1B19");
                 col.Item().Text($"Source: {ds.FileName} · exported {DateTime.Now:yyyy-MM-dd HH:mm} · " +
                                 (filters.Count == 0 ? "no filters" : string.Join(" · ", filters.Select(x => $"{x.Item1}: {x.Item2}"))))
                     .FontColor(Colors.Grey.Darken1);
@@ -153,15 +160,18 @@ public static class ReportExporter
             page.Content().PaddingTop(10).Column(col =>
             {
                 col.Spacing(10);
-                col.Item().Row(row =>
-                {
-                    foreach (var (k, v) in KpiLines(s.Kpis).Where(x => x.Item1 != "Rows"))
-                        row.RelativeItem().Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Column(c =>
-                        {
-                            c.Item().Text(k).FontSize(7).FontColor(Colors.Grey.Darken1);
-                            c.Item().Text(v).FontSize(12).Bold();
-                        });
-                });
+                foreach (var line in KpiLines(s.Kpis).Where(x => x.Item1 != "Rows").Chunk(5))
+                    col.Item().Row(row =>
+                    {
+                        row.Spacing(4);
+                        foreach (var (k, v) in line)
+                            row.RelativeItem().Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Column(c =>
+                            {
+                                c.Item().Text(k).FontSize(7).FontColor(Colors.Grey.Darken1);
+                                c.Item().Text(v).FontSize(12).Bold();
+                            });
+                        for (int i = line.Length; i < 5; i++) row.RelativeItem();
+                    });
 
                 // 3 charts per row at a fixed height keeps all six on the first page.
                 foreach (var group in charts.Chunk(3))
@@ -185,7 +195,7 @@ public static class ReportExporter
                     t.Header(h =>
                     {
                         foreach (var c in cols)
-                            h.Cell().Background("#1d4e89").Padding(3).Text(c.Label).FontColor(Colors.White).FontSize(7).Bold();
+                            h.Cell().Background("#1C1B19").Padding(3).Text(c.Label).FontColor(Colors.White).FontSize(7).Bold();
                     });
                     for (int i = 0; i < rows.Count; i++)
                         foreach (var c in cols)

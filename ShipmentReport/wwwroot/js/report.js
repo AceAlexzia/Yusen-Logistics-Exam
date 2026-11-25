@@ -140,6 +140,7 @@
     });
     containersAndCbm('origin', s.byOrigin, 'Origin');
     containersAndCbm('carrier', s.byCarrier, 'Carrier');
+    containersAndCbm('release', s.byReleasePort, 'Release');
 
     new Chart(canvas('lead'), {
         type: 'bar',
@@ -219,6 +220,39 @@
     };
     split('doc', s.docStatus, 'Doc', [ACCENT, PALE]);
     split('decl', s.declaration, 'Decl', [INK, GREY, PALE, ACCENT, '#8fb0e3']);
+    // Late is the one status to notice, so it gets the warm colour.
+    const delivColor = { 'On time': ACCENT, 'Late': '#c2410c', 'Not delivered': PALE, 'No plan': GREY };
+    split('deliv', s.delivery, 'Deliv', s.delivery.labels.map(l => delivColor[l] ?? GREY));
+
+    // The status charts' legend is HTML, so for export draw the bar plus one labelled row per category into one image.
+    const splitPng = c => {
+        const sets = Chart.getChart(c).data.datasets;
+        const total = sets.reduce((a, d) => a + d.data[0], 0);
+        const W = Math.max(c.clientWidth, 280), barH = c.clientHeight, rowH = 28, k = 2;
+        const out = document.createElement('canvas');
+        out.width = W * k;
+        out.height = (barH + 12 + sets.length * rowH) * k;
+        const x = out.getContext('2d');
+        x.scale(k, k);
+        x.fillStyle = '#fff';
+        x.fillRect(0, 0, W, out.height / k);
+        x.drawImage(c, 0, 0, W, barH); // the bar is plain rectangles, so stretching it is safe
+        x.textBaseline = 'middle';
+        sets.forEach((d, i) => {
+            const y = barH + 12 + i * rowH + rowH / 2;
+            x.fillStyle = d.backgroundColor;
+            x.fillRect(0, y - 6, 12, 12);
+            x.fillStyle = INK;
+            x.font = `400 15px ${Chart.defaults.font.family}`;
+            x.textAlign = 'left';
+            x.fillText(d.label, 22, y);
+            x.font = `500 15px ${Chart.defaults.font.family}`;
+            x.textAlign = 'right';
+            const pct = total ? Math.round(d.data[0] * 100 / total) : 0;
+            x.fillText(`${fmt(d.data[0])}  (${pct}%)`, W, y);
+        });
+        return out.toDataURL('image/png');
+    };
 
     // Export: send each chart as a PNG along with the filters.
     document.getElementById('export')?.addEventListener('submit', ev => {
@@ -230,7 +264,7 @@
             input.type = 'hidden';
             input.dataset.png = '1';
             input.name = `charts[${card.dataset.title}]`;
-            input.value = c.toDataURL('image/png');
+            input.value = card.querySelector('.split-legend') ? splitPng(c) : c.toDataURL('image/png');
             form.appendChild(input);
         });
     });

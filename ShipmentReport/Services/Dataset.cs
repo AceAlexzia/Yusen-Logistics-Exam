@@ -28,6 +28,7 @@ public sealed class ShipmentRow
     public string Invoice { get; init; } = "";
     public string Po { get; init; } = "";
     public string Origin { get; init; } = "";
+    public string ReleasePort { get; init; } = "";
     public string Carrier { get; init; } = "";
     public string Container { get; init; } = "";
     public string Size { get; init; } = "";
