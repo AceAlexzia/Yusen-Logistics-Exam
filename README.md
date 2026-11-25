@@ -6,6 +6,10 @@ number, see interactive charts, and export the report to Excel or PDF.
 Built with ASP.NET Core Razor Pages (.NET 10), [ClosedXML](https://github.com/ClosedXML/ClosedXML) for reading
 and writing Excel, [QuestPDF](https://www.questpdf.com/) for PDF, and [Chart.js](https://www.chartjs.org/) for charts.
 
+## Demo Link
+https://yusen-logistics-exam.onrender.com/
+
+
 ## Features
 
 - **Import** – upload or drag in an `.xlsx`. The first sheet is read and columns are found by **header name**, not
